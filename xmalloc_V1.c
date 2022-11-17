@@ -1,19 +1,23 @@
 #include<unistd.h>
 #include<stdio.h>
 #include<memory.h>
+#include<assert.h>
 
 void* xmalloc(int size)
 {
 	void*p= sbrk(0);
-	printf("\n%p\n",p);
 	
 	if(sbrk(size)==NULL)
 	{
 		return NULL;
 	}
-	p=sbrk(0);
-	printf("\n%p\n",p);
 	return p;
+}
+
+void xfree(int nbyte)
+{
+	assert(nbyte>0);
+	sbrk(nbyte*(-1));
 }
 
 int main()
