@@ -1,6 +1,6 @@
 #include<stdint.h>
 
-typedef enum{ MM_TRUE, MM_FALSE } vm_bool_t;
+typedef enum{ MM_FALSE, MM_TRUE } vm_bool_t;
 typedef struct vm_page_ vm_page_t;
 typedef struct vm_page_family_ vm_page_family_t;
 
