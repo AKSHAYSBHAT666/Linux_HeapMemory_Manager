@@ -19,27 +19,6 @@ void glthread_add_last(glthread_t *base_glthread, glthread_t *new_glthread);
 
 #define IS_GLTHREAD_LIST_EMPTY(glthreadptr)         \
     ((glthreadptr)->right == 0 && (glthreadptr)->left == 0)
-#ifndef __GLUETHREAD__
-#define __GLUETHREAD__
-
-typedef struct _glthread
-{
-    struct _glthread *left;
-    struct _glthread *right;
-}glthread_t;
-
-void glthread_add_next(glthread_t *base_glthread, glthread_t *new_glthread);
-
-void glthread_add_before(glthread_t *base_glthread, glthread_t *new_glthread);
-
-void remove_glthread(glthread_t *glthread);
-
-void init_glthread(glthread_t *glthread);
-
-void glthread_add_last(glthread_t *base_glthread, glthread_t *new_glthread);
-
-#define IS_GLTHREAD_LIST_EMPTY(glthreadptr)         \
-    ((glthreadptr)->right == 0 && (glthreadptr)->left == 0)
 
 
 #define GLTHREAD_TO_STRUCT(fn_name, structure_name, field_name, glthreadptr)           \
