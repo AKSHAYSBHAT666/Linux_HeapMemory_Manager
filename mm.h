@@ -54,9 +54,10 @@ static inline block_meta_data_t* mm_get_biggest_free_block_page_family( vm_page_
     	return NULL;
 }
 
+#define MM_MAX_STRUCT_NAME 32
 
 #define OFFSET_OF(struct_type,field_name)       \
-        (long)&(((struct_type*)0)->field_name)
+        (unsigned long)&(((struct_type*)0)->field_name)
 
 #define MM_GET_PAGE_FROM_META_BLOCK( block_meta_data_ptr )      \
         (void*)((char*)block_meta_data_ptr-(block_meta_data_ptr->offset))
@@ -68,7 +69,7 @@ static inline block_meta_data_t* mm_get_biggest_free_block_page_family( vm_page_
         block_meta_data_ptr->prev_block
 
 #define NEXT_META_BLOCK_BY_SIZE( block_meta_data_ptr )  \
-        (void*)( (char*)block_meta_data_ptr + block_meta_data_ptr->block_size + block_meta_data_ptr->offset )
+        (void*)( (char*)(block_meta_data_ptr+1) + block_meta_data_ptr->block_size  )
 
 #define mm_bind_blocks_for_allocation(allocated_meta_block, free_meta_block)    \
         free_meta_block->next_block = allocated_meta_block->next_block;         \
