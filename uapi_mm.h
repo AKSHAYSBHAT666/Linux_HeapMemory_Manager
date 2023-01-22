@@ -5,8 +5,11 @@
 #include<stdint.h>
 
 void *xcalloc(char *struct_name, int units);
+void  xfree(void *data_ptr);
 #define XCALLOC(units, struct_name) \
     (xcalloc(#struct_name, units))
+#define XFREE(ptr) \
+	(xfree(ptr))
 
 void mm_init();
 void mm_instantiate_new_page_family(char *struct_name , uint32_t struct_size );

@@ -30,11 +30,21 @@ int main()
     	student_t *stud1 = XCALLOC(1, student_t);
     	student_t *stud2 = XCALLOC(1, student_t);
 	
-	
+	emp_t *emp4 = XCALLOC(50,emp_t);
+	emp_t *emp5 = XCALLOC(50,emp_t);
+	emp_t *emp6 = XCALLOC(50,emp_t);
+	emp_t *emp7 = XCALLOC(50,emp_t);
+	printf(" \nSCENARIO 1 : *********** \n");
+        mm_print_memory_usage(0);
+        mm_print_block_usage();
 
-    	printf(" \nSCENARIO 1 : *********** \n");
-    	mm_print_memory_usage(0);
-    	mm_print_block_usage();
+	XFREE(emp4);
+	XFREE(emp5);
+	XFREE(emp6);
+	XFREE(emp7);
+	printf(" \nSCENARIO 2 : *********** \n");
+        mm_print_memory_usage(0);
+        mm_print_block_usage();
 
 	return 0;
 }

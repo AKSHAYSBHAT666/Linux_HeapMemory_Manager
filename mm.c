@@ -17,16 +17,18 @@
 
 static size_t SYSTEM_PAGE_SIZE = 0;
 static vm_page_for_families_t *first_vm_page_for_families = NULL;
-
 void mm_init()
 {
 	SYSTEM_PAGE_SIZE = getpagesize();	
 };
 
+//static vm_page_t* mm_family_new_page_add(vm_page_family_t *vm_page_family);
+
 static inline uint32_t mm_max_page_allocatable_memory(int units)
 {
     return (uint32_t)((SYSTEM_PAGE_SIZE * units) - OFFSET_OF(vm_page_t, page_memory));
 }
+void mm_union_free_blocks(block_meta_data_t *first,block_meta_data_t *second,vm_page_family_t* vm_page_family);
 
 #define MAX_PAGE_ALLOCATABLE_MEMORY(units) \
     (mm_max_page_allocatable_memory(units))
@@ -157,31 +159,6 @@ vm_page_family_t* lookup_page_family_by_name(char *struct_name)
     return NULL;
 }
 
-
-static void mm_union_free_blocks(block_meta_data_t *first, block_meta_data_t *second)
-{
-        if(second==NULL) return;
-        else
-        {
-                if(second->next_block)
-                {
-                        first->next_block = second->next_block;
-                        second->next_block->prev_block = first;
-
-                        first->block_size = first->block_size + second->block_size + sizeof(block_meta_data_t);
-                        return;
-                }
-                else
-                {
-                        /**/
-                        first->next_block = NULL;
-
-                        first->block_size = first->block_size + second->block_size + sizeof(block_meta_data_t);
-                        return;
-                }
-        }
-}
-
 vm_bool_t mm_is_vm_page_empty( vm_page_t *vm_page )
 {
 
@@ -247,6 +224,7 @@ void mm_vm_page_delete_and_free( vm_page_t *vm_page )
    	if(vm_page->next) vm_page->next->prev = vm_page->prev;
     	vm_page->prev->next = vm_page->next;
    	mm_return_vm_page_to_kernel((void *)vm_page, 1);
+	return;
 }
 
 static int free_blocks_comparison_function( void* _block_meta_data1 , void* _block_meta_data2 )
@@ -292,7 +270,7 @@ static vm_page_t* mm_family_new_page_add(vm_page_family_t *vm_page_family)
 static vm_bool_t mm_split_free_data_block_for_allocation( vm_page_family_t* vm_page_family, block_meta_data_t* block_meta_data, uint32_t size )
 {	
 	uint32_t curr_size          = block_meta_data->block_size;
-	uint32_t remaining_size     = block_meta_data->block_size - size;
+	uint32_t remaining_size     = curr_size - size;
 	block_meta_data->is_free    = MM_FALSE;
 	block_meta_data->block_size = size;
 	block_meta_data_t* next_block_meta_data = NULL;	
@@ -360,6 +338,77 @@ void* xcalloc( char* struct_name , int units )
 	return NULL;
 }
 
+void mm_union_free_blocks(block_meta_data_t *first,block_meta_data_t *second,vm_page_family_t* vm_page_family)
+{
+	if(first==NULL) return;
+        if(second==NULL || second->is_free == MM_FALSE) 
+	{
+		remove_glthread(&first->priority_thread_glue);
+		mm_add_free_block_meta_data_to_free_block_list(vm_page_family,first);
+		return;
+	}
+        if(first->is_free != MM_TRUE &&  second->is_free != MM_TRUE ) return;
+        else if(first->is_free == MM_TRUE && second->is_free == MM_TRUE)
+        {
+                remove_glthread(&second->priority_thread_glue);/*detach from active list*/
+                remove_glthread(&first->priority_thread_glue);/*detach from active list*/
+                if(second->next_block)
+                {
+                        first->next_block = second->next_block;
+                        second->next_block->prev_block = first;
+
+                        first->block_size = first->block_size + second->block_size + sizeof(block_meta_data_t);
+                }
+                else
+                {
+                        /**/
+                        first->next_block = NULL;
+
+                        first->block_size = first->block_size + second->block_size + sizeof(block_meta_data_t);
+                }
+        	mm_add_free_block_meta_data_to_free_block_list(vm_page_family,first);
+        }
+
+}
+
+
+static void mm_free_blocks( block_meta_data_t* to_be_free_block )
+{
+	vm_page_t* vm_page_ptr = (vm_page_t*)MM_GET_PAGE_FROM_META_BLOCK(to_be_free_block);
+	if( NEXT_META_BLOCK(to_be_free_block) )
+	{
+		block_meta_data_t* next_block = NEXT_META_BLOCK(to_be_free_block);
+		unsigned int remaining_size   = mm_get_hard_internal_memory_frag_size(to_be_free_block,next_block);
+		to_be_free_block->block_size  = to_be_free_block->block_size + remaining_size;
+		to_be_free_block->is_free     = MM_TRUE;
+		mm_union_free_blocks(to_be_free_block,next_block,vm_page_ptr->pg_family);
+		mm_union_free_blocks(PREV_META_BLOCK(to_be_free_block),to_be_free_block,vm_page_ptr->pg_family);
+	}
+	else
+	{
+		char* ptr = (char*)MM_GET_PAGE_FROM_META_BLOCK(to_be_free_block) + SYSTEM_PAGE_SIZE;
+		while( ((char*)to_be_free_block) > ptr )
+		{
+			ptr = ptr + SYSTEM_PAGE_SIZE;
+		}
+		unsigned long remaining_size=(unsigned long)ptr-(unsigned long)((char*)to_be_free_block+sizeof(block_meta_data_t));
+		to_be_free_block->block_size= remaining_size ;
+		to_be_free_block->is_free   = MM_TRUE;
+		
+		mm_union_free_blocks(to_be_free_block,NEXT_META_BLOCK(to_be_free_block),vm_page_ptr->pg_family);
+                mm_union_free_blocks(PREV_META_BLOCK(to_be_free_block),to_be_free_block,vm_page_ptr->pg_family);
+
+	}
+
+	if(vm_page_ptr->block_meta_data.is_free == MM_TRUE && vm_page_ptr->block_meta_data.next_block == 0 && vm_page_ptr->block_meta_data.prev_block == 0) mm_vm_page_delete_and_free( vm_page_ptr );
+}
+
+void xfree( void* data_ptr )
+{
+	block_meta_data_t *block_meta_data = (block_meta_data_t*) ((char*)data_ptr - sizeof(block_meta_data_t));
+	mm_free_blocks(block_meta_data);
+}
+
 void mm_print_vm_page_details(vm_page_t *vm_page)
 {
    	
@@ -370,7 +419,7 @@ void mm_print_vm_page_details(vm_page_t *vm_page)
     block_meta_data_t *curr;
     ITERATE_VM_PAGE_ALL_BLOCKS_BEGIN(vm_page, curr){
 
-        printf("\t\t\t%-14p Block %-3u %s  block_size = %-6u  "
+        printf("\t%-14p Block %-3u %s  block_size = %-6u  "
                 "offset = %-6u  prev = %-14p  next = %p\n",
                 curr,
                 j++, curr->is_free ? "F R E E D" : "ALLOCATED",
